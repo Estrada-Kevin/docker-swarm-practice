@@ -1,0 +1,86 @@
+version: "3.9"
+
+services:
+  traefik:
+    image: traefik:v2.11
+    command:
+      - --api.dashboard=true
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.swarmMode=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+    ports:
+      - "8080:80"      # apps
+      - "8081:8080"    # dashboard traefik
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - appnet
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: taskboard
+      POSTGRES_USER: taskboard
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - appnet
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+  api:
+    image: taskboard-api:1.0
+    environment:
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: taskboard
+      DB_USER: taskboard
+      DB_PASSWORD_FILE: /run/secrets/postgres_password
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
+    secrets:
+      - postgres_password
+      - jwt_secret
+    networks:
+      - appnet
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health').read()"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+      update_config:
+        parallelism: 1
+        order: start-first
+        delay: 5s
+      labels:
+        - traefik.enable=true
+        - traefik.http.routers.app.rule=PathPrefix(`/api`)
+        - traefik.http.routers.app.entrypoints=web
+        - traefik.http.middlewares.app-stripprefix.stripprefix.prefixes=/api
+        - traefik.http.routers.app.middlewares=app-stripprefix
+        - traefik.http.services.app.loadbalancer.server.port=8000
+
+networks:
+  appnet:
+    driver: overlay
+
+volumes:
+  pgdata:
+
+secrets:
+  postgres_password:
+    external: true
+  jwt_secret:
+    external: true
