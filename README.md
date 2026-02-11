@@ -117,3 +117,25 @@ http://localhost:8080/api/tasks
 
 # Dashboard Traefik en:
 http://localhost:8081/dashboard/
+
+
+## Pipeline CI/CD
+Se extendió el proyecto para incluir un pipeline completo de CI/CD con GitHub Actions
+
+# ¿Cómo sigue?
+La app originalmente se podía levantar con Docker Swarm o localmente usando Docker. A partir de la integración con GitHub Actions, ahora cada push a la rama main dispara automáticamente:
+- Construcción de la imagen Docker desde el Dockerfile
+- Etiquetado con latest y con el SHA del commit
+- Publicación de la imagen en Docker Hub
+
+Esto permite tener imágenes versionadas y listas para el despliegue sin intervención manual.
+
+# ¿Cómo está implementado?
+Debajo de la carpeta .github/workflows/ están los workflows que:
+- configuran el trigger del pipeline
+- hacen login a Docker Hub usando secrets
+- construyen y taggean la imagen
+- la pushean al registry
+
+## Conclusión 
+Al combinar Docker, Swarm, y GitHub Actions, este proyecto tiene como objetivo demostrar un flujo completo que va desde el desarrollo hasta la publicación automatizada de artefactos.
